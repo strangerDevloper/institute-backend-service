@@ -33,7 +33,7 @@ export default {
     entities: ['src/entity/*.ts'],
     migrations: ['src/migrations/*.ts'],
     cli: {
-        entitiesDir: 'src/entities',
+        entitiesDir: 'src/entity',
         migrationsDir: 'src/migrations',
     },
 };
