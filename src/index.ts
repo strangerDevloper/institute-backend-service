@@ -1,58 +1,78 @@
 import { config } from 'dotenv';
-import startApp from './app';
+import { startApp } from './app';
 import { dbManager } from './config/db';
+import { Server } from 'http';
+import { Socket } from 'net';
 
 config();
 
 const port = +(process.env.PORT || 8080);
 
-let server: any;
-let sockets: Set<any> = new Set();
+let server: Server;
+const sockets = new Set<Socket>();
 
-dbManager
-  .connect()
-  .then(async () => {
-    console.log('Connected to Database');
-    server = startApp(port);
-
-    server.timeout = 55000;
-
-    server.on('timeout', (socket: any) => {
-      console.log(
-        '===================================Request Ended=======================================',
-      );
-      socket.destroy();
-    });
-
-    // Track open sockets
-    server.on('connection', (socket: any) => {
-      sockets.add(socket);
-      socket.on('close', () => sockets.delete(socket));
-    });
-  })
-  .catch((err) => console.log('error from herer ', err));
-
-const gracefulShutdown = (error?: any) => {
-  if (error) {
-    console.error('Error:', error);
-  }
-  if (server) {
-    server.close(() => {
-      console.log('Server closed');
-      dbManager.close();
-      // Destroy all open sockets
-      sockets.forEach((socket) => socket.destroy());
-      process.exit(1);
-    });
-    // In case server.close hangs, force exit after 10s
-    setTimeout(() => process.exit(1), 10000);
-  } else {
-    process.exit(1);
-  }
+// Graceful shutdown handler
+const gracefulShutdown = () => {
+    console.log('Starting graceful shutdown...');
+    
+    // Close server
+    if (server) {
+        server.close(() => {
+            console.log('Server closed');
+            
+            // Close all sockets
+            sockets.forEach(socket => {
+                socket.destroy();
+            });
+            
+            // Disconnect from database
+            dbManager.close()
+                .then(() => {
+                    console.log('Database disconnected');
+                    process.exit(0);
+                })
+                .catch(err => {
+                    console.error('Error disconnecting from database:', err);
+                    process.exit(1);
+                });
+        });
+    }
 };
 
-// Handle process signals and exceptions
-process.on('SIGINT', gracefulShutdown);
+// Handle process termination
 process.on('SIGTERM', gracefulShutdown);
-process.on('uncaughtException', gracefulShutdown);
-process.on('unhandledRejection', gracefulShutdown);
+process.on('SIGINT', gracefulShutdown);
+
+// Connect to database and start server
+dbManager
+    .connect()
+    .then(() => {
+        console.log('Connected to Database');
+        
+        // Start the server
+        server = startApp(port);
+        
+        // Set server timeout
+        server.timeout = 55000;
+        
+        // Handle timeout events
+        server.on('timeout', (socket: Socket) => {
+            console.log('Request timeout - closing socket');
+            socket.destroy();
+        });
+
+        // Track open sockets
+        server.on('connection', (socket: Socket) => {
+            sockets.add(socket);
+            socket.on('close', () => sockets.delete(socket));
+        });
+
+        // Handle server errors
+        server.on('error', (error: Error) => {
+            console.error('Server error:', error);
+        });
+    })
+    .catch((err) => {
+        console.error('Failed to start application:', err);
+        process.exit(1);
+    });
