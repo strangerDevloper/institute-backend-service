@@ -1,8 +1,11 @@
+import express, { Express } from 'express';
 import cors from 'cors';
-import express from 'express';
 import { morganMiddleware } from './config/morgan';
+import { apiRoutes } from './api';
+import { errorHandler } from './middleware/error.middleware';
+import { Server } from 'http';
 
-export const app: express.Express = express();
+const app: Express = express();
 
 // Basic CORS setup
 // const corsOptions = {
@@ -17,9 +20,17 @@ app.use(cors());
 
 app.use(morganMiddleware);
 
-const startApp = (port: number) =>
-  app.listen(port, () => {
-    console.log(`Express is listening at ${port}`);
-  });
+// Routes
+app.use('/api', apiRoutes);
 
-export default startApp;
+// Error handling middleware (should be last)
+app.use(errorHandler);
+
+const startApp = (port: number): Server => {
+    const server = app.listen(port, () => {
+        console.log(`Express is listening at ${port}`);
+    });
+    return server;
+};
+
+export { app, startApp };

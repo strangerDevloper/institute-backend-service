@@ -46,4 +46,4 @@ class DbManager {
 }
 
 export const dbManager = new DbManager();
-export const datasoure = new DataSource(ormconfig as DataSourceOptions);
+export const AppDataSource = new DataSource(ormconfig as DataSourceOptions);
